@@ -13,10 +13,17 @@
  */
 
 /**
- * Running this script from a standalone site (starter) monorepo will create a github integration
- * with the p.sh project. Also it will set up all necessary p.sh enviroment variables.
+ * Running this script from a standalone site (starter) monorepo will create a GitHub integration
+ * with the platform.sh project.
+ *
+ * Also it will set up all necessary platform.sh environment variables to run the Bodiless build
+ * and deployment.
+ *
+ * Notes:
+ * - GitHub user password is no longer accepted for HTTPS Git operations. Instead, create GitHub
+ *   Personal Access Token (PAT) in place of a password with the command line or with the API. See
+ *   https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
  */
-
 const fs = require('fs');
 const axios = require('axios');
 
@@ -37,13 +44,13 @@ const APP_SITE_NAME = (
   .replace('@sites/', '');
 
 const preparationStepsMessage = `
-  Before running this script you should prepare your platform.sh project and github account:
+  Before running this script you should prepare your platform.sh project and GitHub account:
 
   1. Create a p.sh project at https://console.platform.sh/
   2. Generate p.sh API token at https://console.platform.sh/-/users/{user}/settings/tokens
-  3. Generate Github personal access token by following the doc:
+  3. Generate GitHub personal access token (PAT) by following the doc:
       https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
-  4. Make sure there are no existing github intergrations for the project yet:
+  4. Make sure there are no existing GitHub integrations for the project yet:
       https://console.platform.sh/{project name}/{project id}/-/settings/integrations
      Otherwise the script will fail due to a conflict.
 
@@ -68,19 +75,15 @@ const userInput = {
 
   // Github repository name
   GITHUB_REPO: undefined,
-
-  // Github password
-  GITHUB_PW: undefined,
 };
 
 const getUserInput = async () => {
   await ask(preparationStepsMessage);
   userInput.PSH_PROJECT_ID = await ask('platform.sh project ID:\n');
   userInput.PSH_API_TOKEN = await ask('platform.sh API token:\n');
-  userInput.GITHUB_PERSONAL_ACCESS_TOKEN = await ask('Github personal access token:\n');
+  userInput.GITHUB_PERSONAL_ACCESS_TOKEN = await ask('Github personal access token(PAT):\n');
   userInput.GITHUB_OWNER = await ask('Github user name:\n');
   userInput.GITHUB_REPO = await ask('Github repository name:\n');
-  userInput.GITHUB_PW = await ask('Github account password:\n');
   readline.close();
 };
 
@@ -93,15 +96,6 @@ const pshGetBearerToken = async () => {
   return request.data?.access_token;
 };
 
-const pshGetProjectIntegrations = async (bearerAccessToken) => {
-  const request = await axios.get(`https://api.platform.sh/projects/${userInput.PSH_PROJECT_ID}/integrations`, {
-    headers: {
-      Authorization: `Bearer ${bearerAccessToken}`,
-    },
-  });
-  return request.data;
-};
-
 const pshCreateGithubIntegration = async (bearerAccessToken) => {
   const url = `https://api.platform.sh/projects/${userInput.PSH_PROJECT_ID}/integrations`;
   const data = {
@@ -111,7 +105,7 @@ const pshCreateGithubIntegration = async (bearerAccessToken) => {
     repository: `${userInput.GITHUB_OWNER}/${userInput.GITHUB_REPO}`,
     fetch_branches: true,
     prune_branches: true,
-    build_pull_requests: false,
+    build_pull_requests: true,
     build_draft_pull_requests: false,
     build_pull_requests_post_merge: false,
     pull_requests_clone_parent_data: false,
@@ -125,22 +119,13 @@ const pshCreateGithubIntegration = async (bearerAccessToken) => {
   return response.status;
 };
 
-const pshGetProjectVatiables = async (bearerAccessToken) => {
-  const request = await axios.get(`https://api.platform.sh/projects/${userInput.PSH_PROJECT_ID}/variables`, {
-    headers: {
-      Authorization: `Bearer ${bearerAccessToken}`,
-    },
-  });
-  return request.data;
-};
-
 const pshCreateProjectVariables = async (bearerAccessToken) => {
   const url = `https://api.platform.sh/projects/${userInput.PSH_PROJECT_ID}/variables`;
   const data = [
     {
       name: 'env:APP_GIT_PW',
       attributes: {},
-      value: userInput.GITHUB_PW,
+      value: userInput.GITHUB_PERSONAL_ACCESS_TOKEN,
       is_json: false,
       is_sensitive: true,
       visible_build: true,
