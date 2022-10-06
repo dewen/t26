@@ -1,0 +1,5 @@
+**/lib
+**/public
+**/.cache
+**/static
+**/node_modules
